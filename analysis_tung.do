@@ -119,6 +119,7 @@ saving("Fig1.gph", replace)
 **************;
 *TABLE 1 PANEL A;
 ****************;
+/*
 use school_info.dta, clear
 
 gen var=""
@@ -166,6 +167,8 @@ TOTteachers  meanage sexratio_teachers HIVtreat
  sum X if Utreat==0 \
  replace mean_control=r(mean) if _n==Y \
  replace sd_control=r(sd) if _n==Y ;
+
+#delimit cr
  
 for var p_Uonly p_Honly p_UH p_UUH p_HUH  mean* sd*: replace X=round(X, 0.001)
 
@@ -177,7 +180,7 @@ drop if mean_U==.
 
 dataout , save(table1a.tex) replace tex
 
-/*
+
 outsheet var mean_U sd_U mean_H sd_H mean_UH sd_UH  mean_control sd_control ///
 p_Uonly p_Honly p_UH p_UUH p_HUH  N if _n<=`vars' ///
 using "table1a.xls",replace
@@ -207,16 +210,51 @@ gen religiosity = 1 if q52_church >= 75 & q52_church != .
 replace religiosity = 0 if q52_church < 75
 drop if religiosity == . 
 
-gen religiosity_alt = 1 if q52_church == 100 
-replace religiosity_alt = 0 if q52_church < 100
-drop if religiosity_alt == . 
+gen religiosity_2 = 1 if q52_church == 100 
+replace religiosity_2 = 0 if q52_church < 100
+drop if religiosity_2 == . 
 
-collapse religiosity religiosity_alt, by(schoolid)
+gen religiosity_3 = 1 if q52_church >0 & q52_church != .
+replace religiosity_3 = 0 if q52_church == 0
+drop if religiosity_3 == . 
 
-save religiosity_score, replace
+/*
+label define religval ///
+1  "protestant" ///
+2  "catholic" ///
+3  "muslim" ///
+4  "hindu"
+
+label values q12_religion religval
+
+decode q12_religion, gen(relig_str) 
+
+for any protestant catholic muslim hindu: gen X=.
+
+local varlist "protestant catholic muslim hindu"
+foreach var of varlist protestant catholic muslim hindu{
+ replace `religion' = 1 if relig_str == "`religion'"
+ replace `religion' = 0 if relig_str != "`religion'"
+ }
+ */
+
+gen protestant = 1 if q12_religion ==1
+replace protestant = 0 if q12_religion !=1
+gen catholic = 1 if q12_religion ==2
+replace catholic = 0 if q12_religion !=2
+gen muslim = 1 if q12_religion ==3
+replace muslim = 0 if q12_religion !=3
+gen hindu = 1 if q12_religion ==4
+replace hindu = 0 if q12_religion !=4
+
+collapse protestant catholic muslim hindu ///
+religiosity religiosity_2 religiosity_3, ///
+by(schoolid)
+
+save religion_byschool, replace
 
 use school_info.dta, replace
-merge m:1 schoolid using religiosity_score.dta
+merge m:1 schoolid using religion_byschool.dta
 
 gen var=""
 for any  mean_U sd_U mean_H sd_H  mean_UH sd_UH  mean_control sd_control p_Uonly p_Honly p_UH p_UUH p_HUH  N: gen X=.
@@ -230,9 +268,11 @@ gen Uonly=(HIVtreat==0) & (Utreat==1)
 gen UH=(HIVtreat==1) & (Utreat==1)
 
 #delimit;
-local vars=12;
+local vars=17;
 for any  kcpe2003  schsize ratio02  latrine_2004 urban total_2km  
-TOTteachers  meanage sexratio_teachers HIVtreat religiosity religiosity_alt
+TOTteachers  meanage sexratio_teachers HIVtreat
+protestant catholic muslim hindu
+religiosity religiosity_2 religiosity_3
 
  \ num 1/`vars':
  replace var="X" if _n==Y \
@@ -263,6 +303,8 @@ TOTteachers  meanage sexratio_teachers HIVtreat religiosity religiosity_alt
  sum X if Utreat==0 \
  replace mean_control=r(mean) if _n==Y \
  replace sd_control=r(sd) if _n==Y ;
+
+#delimit cr
  
 for var p_Uonly p_Honly p_UH p_UUH p_HUH  mean* sd*: replace X=round(X, 0.001)
 
@@ -350,38 +392,37 @@ p_Uonly p_Honly p_UH p_UUH p_HUH  N if _n<=`vars' using "table1b.xls",replace;
 *************;
 ***TABLE 2: ROLL CALL RESULTS;
 *****************;
+use studysample_allmerged2.dta, clear
 
-#delimit;
-use studysample_allmerged2.dta, clear;
+gen HnoCT=Honly*(1-sampleCT103v1)
+gen UHnoCT=UH*(1-sampleCT103v1)
+gen HwithCT=Honly*(sampleCT103v1)
+gen UHwithCT=UH*(sampleCT103v1)
 
-gen HnoCT=Honly*(1-sampleCT103v1);
-gen UHnoCT=UH*(1-sampleCT103v1);
-gen HwithCT=Honly*(sampleCT103v1);
-gen UHwithCT=UH*(sampleCT103v1);
+foreach visit in 04v1 04v2 05v1 05v2 05v3 {
+	gen presence`visit'=pres`visit'
+	replace presence`visit'=0 if pres`visit'==2
+	replace presence`visit'=0.5 if pres`visit'==3
+	replace presence`visit'=. if pres`visit'>3
+}
 
-foreach visit in 04v1 04v2 05v1 05v2 05v3 {;
-	gen presence`visit'=pres`visit';
-	replace presence`visit'=0 if pres`visit'==2;
-	replace presence`visit'=0.5 if pres`visit'==3;
-	replace presence`visit'=. if pres`visit'>3;
-};
+replace dropout05v3=0 if presence05v3==1
+replace dropout05v3=. if evdead05v3==1
 
-replace dropout05v3=0 if presence05v3==1;
-replace dropout05v3=. if evdead05v3==1;
+egen presence=rmean(presence04v1 presence04v2 presence05v1 presence05v2 presence05v3)
 
-egen presence=rmean(presence04v1 presence04v2 presence05v1 presence05v2 presence05v3);
+foreach date in 05v3 07v2 {
+	replace evmar`date'=0 if evmar`date'==. & evpreg`date'==1
+	gen evunpregmar`date'=(1-evpreg`date')*evmar`date'
+	gen evpregunmar`date'=evpreg`date'*(1-evmar`date')
+	gen marifchild`date'=evmar`date' if evpreg`date'==1
+}
 
-foreach date in 05v3 07v2 {;
-	replace evmar`date'=0 if evmar`date'==. & evpreg`date'==1;
-	gen evunpregmar`date'=(1-evpreg`date')*evmar`date';
-	gen evpregunmar`date'=evpreg`date'*(1-evmar`date');
-	gen marifchild`date'=evmar`date' if evpreg`date'==1;
-};
+global varlist "presence evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 dropout07v2 evmar07v2 evpreg07v2 evpregunmar07v2 evunpregmar07v2"
 
-
-global varlist "presence evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 dropout07v2 evmar07v2 evpreg07v2 evpregunmar07v2 evunpregmar07v2";
 
 ** WITHOUT CT;
+#delimit;
 local i 2;
 while `i'>0 { ;
 		sum  dropout05v3 if sex==`i' & group03v1=="C";
@@ -425,10 +466,12 @@ while `i'>0 { ;
 	
 local i=`i'-1;
 } ;
+#delimit cr
 
-
+*results confirmed**
 
 ** WITH ALL CT TREATMENTS (Table 5 cols 4-5-6);
+#delimit ;
 local i 2;
 while `i'>0 { ;
 		sum  dropout05v3 if sex==`i' & group03v1=="C";
@@ -473,9 +516,7 @@ while `i'>0 { ;
 local i=`i'-1;
 } ;
 
-
-
-*/;
+#delimit cr
 
 ***********************************************;
 ***TABLES 3, 4 and 6: Long-run follow-up results;
@@ -1348,7 +1389,7 @@ erase temp.dta;
 *****************************************************;
 ***APPENDIX TABLE A4: QUALITY OF LR DATA;
 *********************************************************;
-
+*checking for attrition across different arms
 
 #delimit;
 use studysample_allmerged2.dta, clear;
@@ -1364,7 +1405,7 @@ foreach date in 05v3 07v2 {;
 local i 2;
 while `i'>0 { ;
 		
-	global var="evpreg05v3";
+	global var="evpreg05v3"; //use this as dummy for attrition
 		sum  ${var} if sex==`i' & group03v1=="C";
 		gen mean=r(mean);
 		xi: reg ${var} ${treatmentdummies} ${controlsR} , cluster(sch03v1), if sex==`i';
@@ -1426,7 +1467,7 @@ while `i'>0 { ;
 		outreg2 ${treatmentdummies} using "tableA4_`i'.xls", nor2 bdec(3) se nonotes  /*sigsymb(***,**,*)*/ 10pct addstat("Mean C", mean, "U=UH", `p1', "H=UH", `p2',"U=H", `p3', "UH=U+H", `p4') adec(3)  append;
 		drop mean;
 
-	global var="evpreg07v2";
+	global var="evpreg07v2"; //use this as dummy for attrition
 		sum  ${var} if sex==`i' & group03v1=="C";
 		gen mean=r(mean);
 		xi: reg ${var} ${treatmentdummies} ${controlsR} , cluster(sch03v1), if sex==`i';
@@ -1588,8 +1629,6 @@ replace age= r(mean) if agemissing==1
 
 drop q6o
 
-
-
 *CONTROLS
 gen transferred=0
 	replace transferred=1 if q6==2
@@ -1680,8 +1719,6 @@ foreach X of varlist  HIVmentionedinclass- mentionfaithfulness
 	drop mean_`X';
 	}; 
 
-	
-	
 
 ** ALL CT TREATMENTS (Table 5 cols 1-3);
 #delimit;
