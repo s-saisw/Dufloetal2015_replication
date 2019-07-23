@@ -1,3 +1,9 @@
+*****************************************************************
+*** Replication of Duflo, E., Dupas, P., \& Kremer, M. (2015) ***
+*****************************************************************
+
+version 12
+
 clear all
 set mem 500m
 set more off
@@ -879,7 +885,9 @@ gen BD_year=year(LOG_bd_BDrealdate);
 	replace hiv_positive=. if sampledVCT!=1;
 
 	save temp, replace;
-     
+
+
+	
 local depvars 17;
 for any 
 	reached8	
@@ -993,11 +1001,13 @@ while `j' <= `depvars' {;
 
 	
 */;	
+*/
 
 ***************************;
 *** TABLE 7 ***************;
 ****************************;
 
+/*
 #delimit;
 gen var=.;
 gen group="";
@@ -1039,7 +1049,7 @@ outsheet group N mean mean_U mean_H mean_UH mean_control if _n<=`group' using hs
 restore;
 
 
-	
+*/	
 
 *******************************************************************;
 *******************************************************************;
@@ -1053,6 +1063,7 @@ restore;
 *************************************************************;
 **** APPENDIX TABLE A1: ACCURACY OF ROLL CALL METHOD;
 *****************************************************************;
+/*
 #delimit;
 use hometracking.dta, clear;
 	//rename q5 pupilid;
@@ -1145,15 +1156,15 @@ gen UH=(HIVtreat03v1==1) & (Utreat03v1==1);
 
 
 erase tp1.dta;
-
+*/
 
 *****************************************************;
 ***APPENDIX TABLE A2: ATTRITION IN ROLL CALL DATA;
 *********************************************************;
 
-#delimit;
-use studysample_allmerged2.dta, clear;
+use studysample_allmerged2.dta, clear
 
+#delimit;
 foreach visit in 04v1 04v2 05v1 05v2 05v3 {;
 	gen presence`visit'=pres`visit';
 	replace presence`visit'=0 if pres`visit'==2;
@@ -1169,7 +1180,7 @@ foreach date in 05v3 07v2 {;
 	replace evmar`date'=0 if evmar`date'==. & evpreg`date'==1;
 };
 
-foreach var in dropout05v3 presence evmar05v3 evpreg05v3 { ;
+foreach var in dropout05v3 presence evmar05v3 evpreg05v3 { ; //outcome missing in 2005
 			gen `var'_missing=0;
 			replace `var'_missing=1 if `var'==. & evdead05v3!=1;
 			} ;
@@ -1178,9 +1189,15 @@ foreach var in dropout07v2 evmar07v2 evpreg07v2  { ;
 			gen `var'_missing=0;
 			replace `var'_missing=1 if `var'==. & evdead07v2!=1;
 			} ;
+
+#delimit cr
+
+save attri_SMR.dta, replace //save imtermediate data for use
+
+#delimit;
 local i 2;
 while `i'>0 { ;
-		sum  dropout05v3_missing if sex==`i' & group03v1=="C";
+		sum  dropout05v3_missing if sex==`i' & group03v1=="C"; //outcome missing in 2007
 		gen mean=r(mean);
 		xi: reg dropout05v3_missing ${treatmentdummies} ${controlsR}, cluster(sch03v1), if sex==`i';
 			test Uonly=UH;
@@ -1221,7 +1238,7 @@ while `i'>0 { ;
 	
 local i=`i'-1;
 } ;
-
+*/
 
 
 
@@ -1229,9 +1246,9 @@ local i=`i'-1;
 ***APPENDIX TABLE A3: ATTRITION IN LR DATA;
 *********************************************************;
 
-#delimit;
-use temp.dta, clear;
+use temp.dta, clear
 
+#delimit;
 foreach var in an_grades_completed an_ever_fert hsv2_positive { ;
 					gen `var'_notmissing=1;
 					replace `var'_notmissing=0 if `var'==. & dead!=1;
@@ -1240,8 +1257,11 @@ foreach var in an_grades_completed an_ever_fert hsv2_positive { ;
 gen found_RT=(eligible_ITsampling==0)*(LOG_surveyed==1);
 gen found_IT=(LOG_surveyed==1) if sampledIT==1;
 gen found=(found_IT==1) |(found_RT ==1) if dead==0;
+#delimit cr
 
+save attrition.dta, replace //add this line to consider attrition
 
+#delimit;
 local i 2;
 while `i'>0 { ;
 		sum dead if sex==`i' & group03v1=="C";
@@ -1384,12 +1404,13 @@ while `i'>0 { ;
 local i=`i'-1;
 } ;
 
-erase temp.dta;
+*erase temp.dta;
 
 *****************************************************;
 ***APPENDIX TABLE A4: QUALITY OF LR DATA;
 *********************************************************;
 *checking for attrition across different arms
+/*
 
 #delimit;
 use studysample_allmerged2.dta, clear;
@@ -1405,7 +1426,7 @@ foreach date in 05v3 07v2 {;
 local i 2;
 while `i'>0 { ;
 		
-	global var="evpreg05v3"; //use this as dummy for attrition
+	global var="evpreg05v3"; 
 		sum  ${var} if sex==`i' & group03v1=="C";
 		gen mean=r(mean);
 		xi: reg ${var} ${treatmentdummies} ${controlsR} , cluster(sch03v1), if sex==`i';
@@ -1530,7 +1551,7 @@ while `i'>0 { ;
 
 local i=`i'-1;
 } ;
-
+*/
 
 
 ***********************************************;
@@ -1541,6 +1562,7 @@ local i=`i'-1;
 ******************
 **********girls;
 ********************;
+/*
 #delimit;
 use KAPgirls, clear;
 //rename q3 schoolid;
@@ -1990,3 +2012,142 @@ local txt LRimpact_1 LRimpact_2 LRimpactCT2_1 LRimpactCT2_2 table2_1 table2_2 ta
 foreach file in `txt' {;
 	erase `file'.txt;
 };
+*/
+
+****************************
+*** Heckman 2-step model ***
+****************************
+version 15
+*limit sample to only for girls
+* treatmentdummiesCT2="Uonly HnoCT UHnoCT HwithCT UHwithCT"
+* controlsR="yrbirth_all yrbirth_missing date05v3 date07v2 schsize i.stratum"
+* varlist "presence evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 dropout07v2 evmar07v2 evpreg07v2 evpregunmar07v2 evunpregmar07v2"
+* treatmentdummies="Uonly Honly UH"
+
+// use attrition.dta, replace //This is LR attrition data
+
+use attri_SMR.dta, replace
+drop if sex !=2 //keep only females
+sort pupilid
+
+*clean as in the original dofile
+foreach visit in 04v1 04v2 05v1 05v2 05v3 {
+	gen presence`visit'=pres`visit'
+	replace presence`visit'=0 if pres`visit'==2
+	replace presence`visit'=0.5 if pres`visit'==3
+	replace presence`visit'=. if pres`visit'>3
+}
+
+replace dropout05v3=0 if presence05v3==1
+replace dropout05v3=. if evdead05v3==1
+
+foreach date in 05v3 07v2 {
+	replace evmar`date'=0 if evmar`date'==. & evpreg`date'==1
+	gen evunpregmar`date'=(1-evpreg`date')*evmar`date'
+	gen evpregunmar`date'=evpreg`date'*(1-evmar`date')
+	gen marifchild`date'=evmar`date' if evpreg`date'==1
+}
+
+*Table 2A
+foreach x in dropout05v3 evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 { 
+    xi:regress `x' $treatmentdummies $controlsR , cluster(sch03v1)
+	eststo
+	test Uonly=UH
+	estadd local p1=r(p)
+	test Honly=UH
+	estadd local p2=r(p)
+	test Honly=Uonly
+	estadd local p3=r(p)
+	test UH=Uonly+Honly
+	estadd local p4=r(p)
+}
+esttab //results confirmed
+eststo clear
+
+*Table 2B
+foreach x in dropout07v2 evmar07v2 evpreg07v2 evpregunmar07v2 evunpregmar07v2 { 
+    xi:regress `x' $treatmentdummies $controlsR , cluster(sch03v1)
+	eststo
+	test Uonly=UH
+	estadd local p1=r(p)
+	test Honly=UH
+	estadd local p2=r(p)
+	test Honly=Uonly
+	estadd local p3=r(p)
+	test UH=Uonly+Honly
+	estadd local p4=r(p)
+}
+esttab //results confirmed
+eststo clear
+
+*if available for some still considered found
+*some is 0 not all
+* sum of missing max=4 : miss all
+* sum of missing min=0 : available all
+
+gen found05 = 0 
+replace found05 = 1 ///
+if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing <=3
+
+gen found05_strict = 0 
+replace found05_strict = 1 ///
+if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing == 0
+
+summarize found05 found05_strict
+
+xi: reg found05 ${treatmentdummies} ${controlsR}, ///
+cluster(sch03v1)
+test Uonly=UH 
+	estadd local p1=r(p)
+	test Honly=UH //significant
+	estadd local p2=r(p)
+	test Honly=Uonly 
+	estadd local p3=r(p)
+
+xi: reg found05_strict ${treatmentdummies} ${controlsR}, ///
+cluster(sch03v1)
+test Uonly=UH //significant
+	estadd local p1=r(p)
+	test Honly=UH
+	estadd local p2=r(p)
+	test Honly=Uonly
+	estadd local p3=r(p)
+
+xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
+twostep select(found05_strict ${treatmentdummies} ${controlsR}) 
+//similar magnitude
+
+// any other instrument we can find? 
+// an exclusion restriction is required to generate credible estimates:
+// there must be at least one variable which appears with 
+// a non-zero coefficient in the selection equation but does not appear 
+// in the equation of interest, essentially an instrument. 
+// If no such variable is available, it may be difficult to correct for 
+// sampling selectivity.
+
+*IV is limited
+xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
+twostep select(found05_strict ${treatmentdummies} ${controlsR} i.Q_b1_20) 
+
+* Lee's bound estimator //results should be similar for Honly and UH
+xi: reg dropout05v3 Uonly // -.0214642 sig
+xi: reg dropout05v3 Uonly ${controlsR} //-.0270405 sig 
+
+xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
+twostep select(found05_strict ${treatmentdummies} ${controlsR}) 
+
+xi: leebounds dropout05v3 Uonly // -.0246442 to -.0208772 sig
+
+xi: leebounds dropout05v3 Uonly, ///
+tight(${controlsR})
+
+gen H_dummy = 0
+replace H_dummy = 1 if Honly == 1 | UH == 1
+
+xi: reg dropout05v3 H_dummy // -.0002798  insig
+xi: reg dropout05v3 H_dummy ${controlsR} //.0091512  insig 
+
+xi: leebounds dropout05v3 H_dummy //  -.0007494  to .0019819 insig
+
+
+
