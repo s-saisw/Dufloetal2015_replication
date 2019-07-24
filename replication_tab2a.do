@@ -9,7 +9,7 @@ drop if sex !=2 //keep only females
 
 eststo clear
 
-foreach x in dropout05v3 evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 { 
+foreach x in dropout05v3 presence evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 { 
     xi:regress `x' $treatmentdummies $controlsR , cluster(sch03v1)
 	eststo
 	sum `x' if group03v1=="C"
@@ -24,14 +24,14 @@ foreach x in dropout05v3 evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 {
 	estadd scalar p4=r(p)
 }
 
-estout est1 est2 est3 est4 est5 ///
+estout est1 est2 est3 est4 est5 est6 ///
 using tab2a_rep.tex, replace ///
 cells(b(star fmt(3)) se(par)) ///
 keep(Uonly Honly UH) ///
 stats(N mean p1 p2 p3 p4, ///
 labels("Observations" "Control mean" "U=UH" "H=UH" "U=H" "UH=U+H") ///
 fmt(%15.0fc %9.3f %9.3f %9.3f %9.3f %9.3f )) ///
-mlabels("Dropout" "married" "pregnant" "preg unmar." "mar unpreg.") ///
+mlabels("Dropout" "Presence" "married" "pregnant" "preg unmar." "mar unpreg.") ///
 collabels(none) ///
 label wrap ///
 numbers ///

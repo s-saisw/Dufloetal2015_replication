@@ -15,7 +15,6 @@ global controlsR="yrbirth_all yrbirth_missing date05v3 date07v2 schsize i.stratu
 global controls="yrbirth_all yrbirth_missing schsize i.stratum"
 global controlsKAP="age agemissing schsize i.stratum"
 global controlsB="yrbirth_all yrbirth_missing"
-
 global varlist "presence evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 dropout07v2 evmar07v2 evpreg07v2 evpregunmar07v2 evunpregmar07v2"
 
 * Merge school data and individual data. This is the same as the original do file    
@@ -42,7 +41,6 @@ do replication_taba3.do
 ****************************
 *** Heckman 2-step model ***
 ****************************
-version 15
 
 use attri_SMR.dta, replace
 drop if sex !=2
@@ -53,18 +51,47 @@ foreach x in dropout05v3 presence evmar05v3 evpreg05v3{
 	replace `x'_found = 1 if `x'_missing==0
 }
 
-xi: reg dropout05v3_found ${treatmentdummies} ${controlsR}, ///
-cluster(sch03v1)
-test Uonly=UH 
-test Honly=UH //sig
-test Honly=Uonly
+gen distance = Q_b1_21
 
-xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
-twostep select(dropout05v3_found ${treatmentdummies} ${controlsR}) 
+foreach x in dropout05v3 presence {
+	xi: heckman `x' ${treatmentdummies} ${controlsR}, ///
+	twostep select(${treatmentdummies} ${controlsR}) 
+	eststo
 
-xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
-select(found05_strict ${treatmentdummies} ${controlsR}) ///
-vce(cluster sch03v1)
+	xi: heckman `x' ${treatmentdummies} ${controlsR}, ///
+	twostep select(${treatmentdummies} ${controlsR} distance)
+	eststo
+	estadd local IV = "Yes"
+}
+
+xi: reg dropout05v3_found distance ${treatmentdummies} ${controlsR}
+test distance
+
+estout est1 est2 est3 est4 ///
+using tab_hec_SR.tex, replace ///
+cells(b(star fmt(3)) se(par)) ///
+keep(Uonly Honly UH distance) ///
+stats(N IV, ///
+labels("Observations" "Instrument") ///
+fmt(%15.0fc %9.3f )) ///
+mlabels(none) ///
+mgroups("Dropout" "Presence", pattern(1 0 1 0)) ///
+collabels(none) ///
+label wrap ///
+numbers ///
+starlevels(* 0.1 ** 0.05 *** 0.01) ///
+style(tex) varlabels(_cons Constant) ///
+prehead(\begin{center} \begin{threeparttable} ///
+\begin{tabular}{l*{@M}{r}} \hline \hline ) ///
+posthead(\hline ) ///
+prefoot(\hline ) ///
+postfoot(\hline \end{tabular} \begin{tablenotes} \small ///
+\item Standard errors in parentheses, ///
+clustered by school. $@starlegend$  ///
+\end{tablenotes} \end{threeparttable} \end{center})
+
+eststo clear
+
 
 
 *if available for some still considered found
@@ -103,24 +130,48 @@ test Uonly=UH //significant
 	estadd local p3=r(p)
 */
 
+foreach x in dropout05v3 presence {
+	foreach y in Uonly Honly UH {
+		leebounds `x' `y'
+		eststo
+		}
+}
+
+estout est1 est2 est3 est4 est5 est6 ///
+using tab_lee_SR.tex, replace ///
+cells(b(star fmt(3)) se(par)) ///
+stats(N trim, ///
+labels("Observations" "Trimming proportion") ///
+fmt(%15.0fc %9.3f )) ///
+mlabels("Uonly" "Honly" "UH" "Uonly" "Honly" "UH") ///
+mgroups("Dropout" "Presence", pattern(1 0 0 1 0 0)) ///
+collabels(none) ///
+label wrap ///
+numbers ///
+starlevels(* 0.1 ** 0.05 *** 0.01) ///
+style(tex) varlabels(_cons Constant) ///
+prehead(\begin{center} \begin{threeparttable} ///
+\begin{tabular}{l*{@M}{r}} \hline \hline ) ///
+posthead(\hline ) ///
+prefoot(\hline ) ///
+postfoot(\hline \end{tabular} \begin{tablenotes} \small ///
+\item Standard errors in parentheses, ///
+clustered by school. $@starlegend$  ///
+\end{tablenotes} \end{threeparttable} \end{center})
+
+eststo clear
 
 
 
-*IV is limited
-xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
-twostep select(found05_strict ${treatmentdummies} ${controlsR} i.Q_b1_20) 
+esttab
+leebounds dropout05v3 Uonly // -.0246442 to -.0208772 sig
+eststo clear
 
-* Lee's bound estimator //results should be similar for Honly and UH
-xi: reg dropout05v3 Uonly // -.0214642 sig
-xi: reg dropout05v3 Uonly ${controlsR} //-.0270405 sig 
 
-xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
-twostep select(found05_strict ${treatmentdummies} ${controlsR}) 
+leebounds dropout05v3 Honly
+eststo
 
-xi: leebounds dropout05v3 Uonly // -.0246442 to -.0208772 sig
-
-xi: leebounds dropout05v3 Uonly, ///
-tight(${controlsR})
+leebounds dropout05v3 UH
 
 gen H_dummy = 0
 replace H_dummy = 1 if Honly == 1 | UH == 1
