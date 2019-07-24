@@ -39,6 +39,98 @@ do replication_taba2.do
 * Regression: Table A3 Attrition in long run survey
 do replication_taba3.do
 
+****************************
+*** Heckman 2-step model ***
+****************************
+version 15
+
+use attri_SMR.dta, replace
+drop if sex !=2
+sort pupilid
+
+foreach x in dropout05v3 presence evmar05v3 evpreg05v3{
+	gen `x'_found = 0
+	replace `x'_found = 1 if `x'_missing==0
+}
+
+xi: reg dropout05v3_found ${treatmentdummies} ${controlsR}, ///
+cluster(sch03v1)
+test Uonly=UH 
+test Honly=UH //sig
+test Honly=Uonly
+
+xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
+twostep select(dropout05v3_found ${treatmentdummies} ${controlsR}) 
+
+xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
+select(found05_strict ${treatmentdummies} ${controlsR}) ///
+vce(cluster sch03v1)
+
+
+*if available for some still considered found
+*some is 0 not all
+* sum of missing max=4 : miss all
+* sum of missing min=0 : available all
+
+/*
+gen found05 = 0 
+replace found05 = 1 ///
+if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing <=3
+
+gen found05_strict = 0 
+replace found05_strict = 1 ///
+if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing == 0
+
+summarize found05 found05_strict
+
+
+xi: reg found05 ${treatmentdummies} ${controlsR}, ///
+cluster(sch03v1)
+test Uonly=UH 
+	estadd local p1=r(p)
+	test Honly=UH //significant
+	estadd local p2=r(p)
+	test Honly=Uonly 
+	estadd local p3=r(p)
+
+xi: reg found05_strict ${treatmentdummies} ${controlsR}, ///
+cluster(sch03v1)
+test Uonly=UH //significant
+	estadd local p1=r(p)
+	test Honly=UH
+	estadd local p2=r(p)
+	test Honly=Uonly
+	estadd local p3=r(p)
+*/
+
+
+
+
+*IV is limited
+xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
+twostep select(found05_strict ${treatmentdummies} ${controlsR} i.Q_b1_20) 
+
+* Lee's bound estimator //results should be similar for Honly and UH
+xi: reg dropout05v3 Uonly // -.0214642 sig
+xi: reg dropout05v3 Uonly ${controlsR} //-.0270405 sig 
+
+xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
+twostep select(found05_strict ${treatmentdummies} ${controlsR}) 
+
+xi: leebounds dropout05v3 Uonly // -.0246442 to -.0208772 sig
+
+xi: leebounds dropout05v3 Uonly, ///
+tight(${controlsR})
+
+gen H_dummy = 0
+replace H_dummy = 1 if Honly == 1 | UH == 1
+
+xi: reg dropout05v3 H_dummy // -.0002798  insig
+xi: reg dropout05v3 H_dummy ${controlsR} //.0091512  insig 
+
+xi: leebounds dropout05v3 H_dummy //  -.0007494  to .0019819 insig
+
+
 /*
 ********************;
 ****FIGURE 1************;
@@ -1250,109 +1342,5 @@ foreach file in `txt' {;
 	erase `file'.txt;
 };
 */
-
-****************************
-*** Heckman 2-step model ***
-****************************
-version 15
-*limit sample to only for girls
-* treatmentdummiesCT2="Uonly HnoCT UHnoCT HwithCT UHwithCT"
-* controlsR="yrbirth_all yrbirth_missing date05v3 date07v2 schsize i.stratum"
-* varlist "presence evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 dropout07v2 evmar07v2 evpreg07v2 evpregunmar07v2 evunpregmar07v2"
-* treatmentdummies="Uonly Honly UH"
-
-// use attrition.dta, replace //This is LR attrition data
-
-use attri_SMR.dta, replace
-drop if sex !=2 //keep only females
-sort pupilid
-
-*clean as in the original dofile
-foreach visit in 04v1 04v2 05v1 05v2 05v3 {
-	gen presence`visit'=pres`visit'
-	replace presence`visit'=0 if pres`visit'==2
-	replace presence`visit'=0.5 if pres`visit'==3
-	replace presence`visit'=. if pres`visit'>3
-}
-
-replace dropout05v3=0 if presence05v3==1
-replace dropout05v3=. if evdead05v3==1
-
-foreach date in 05v3 07v2 {
-	replace evmar`date'=0 if evmar`date'==. & evpreg`date'==1
-	gen evunpregmar`date'=(1-evpreg`date')*evmar`date'
-	gen evpregunmar`date'=evpreg`date'*(1-evmar`date')
-	gen marifchild`date'=evmar`date' if evpreg`date'==1
-}
-
-*if available for some still considered found
-*some is 0 not all
-* sum of missing max=4 : miss all
-* sum of missing min=0 : available all
-
-gen found05 = 0 
-replace found05 = 1 ///
-if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing <=3
-
-gen found05_strict = 0 
-replace found05_strict = 1 ///
-if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing == 0
-
-summarize found05 found05_strict
-
-xi: reg found05 ${treatmentdummies} ${controlsR}, ///
-cluster(sch03v1)
-test Uonly=UH 
-	estadd local p1=r(p)
-	test Honly=UH //significant
-	estadd local p2=r(p)
-	test Honly=Uonly 
-	estadd local p3=r(p)
-
-xi: reg found05_strict ${treatmentdummies} ${controlsR}, ///
-cluster(sch03v1)
-test Uonly=UH //significant
-	estadd local p1=r(p)
-	test Honly=UH
-	estadd local p2=r(p)
-	test Honly=Uonly
-	estadd local p3=r(p)
-
-xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
-twostep select(found05_strict ${treatmentdummies} ${controlsR}) 
-//similar magnitude
-
-// any other instrument we can find? 
-// an exclusion restriction is required to generate credible estimates:
-// there must be at least one variable which appears with 
-// a non-zero coefficient in the selection equation but does not appear 
-// in the equation of interest, essentially an instrument. 
-// If no such variable is available, it may be difficult to correct for 
-// sampling selectivity.
-
-*IV is limited
-xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
-twostep select(found05_strict ${treatmentdummies} ${controlsR} i.Q_b1_20) 
-
-* Lee's bound estimator //results should be similar for Honly and UH
-xi: reg dropout05v3 Uonly // -.0214642 sig
-xi: reg dropout05v3 Uonly ${controlsR} //-.0270405 sig 
-
-xi: heckman dropout05v3 ${treatmentdummies} ${controlsR}, ///
-twostep select(found05_strict ${treatmentdummies} ${controlsR}) 
-
-xi: leebounds dropout05v3 Uonly // -.0246442 to -.0208772 sig
-
-xi: leebounds dropout05v3 Uonly, ///
-tight(${controlsR})
-
-gen H_dummy = 0
-replace H_dummy = 1 if Honly == 1 | UH == 1
-
-xi: reg dropout05v3 H_dummy // -.0002798  insig
-xi: reg dropout05v3 H_dummy ${controlsR} //.0091512  insig 
-
-xi: leebounds dropout05v3 H_dummy //  -.0007494  to .0019819 insig
-
 
 

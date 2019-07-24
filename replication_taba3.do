@@ -1,12 +1,82 @@
 * ==================================================================================
-* This program replicates results from Table A2 for girls only
+* This program replicates results from Table A2 column 1-4 for girls only
 * data sets used - attri_LR.dta
-* output         - table3A_1.xls
-*                - table3A_2.xls
+* output         - taba3_rep.tex
 * ==================================================================================
 
 use attri_LR.dta, replace 
+drop if sex !=2
 
+* no sampling weight
+foreach x in dead { //m1
+	xi: reg `x' ${treatmentdummies} ${controls}, cluster(sch03v1)
+	eststo
+	summarize `x' if group03v1=="C"
+	estadd scalar mean=r(mean)
+	test Uonly=UH
+	estadd scalar p1=r(p)
+	test Honly=UH
+	estadd scalar p2=r(p)
+	test Honly=Uonly
+	estadd scalar p3=r(p)
+}
+
+foreach x in found_RT found { //m2, m4
+	xi: reg `x' ${treatmentdummies} ${controls} ///
+	if dead==0, ///
+	cluster(sch03v1)
+	eststo
+	summarize `x' if group03v1=="C" & dead==0 
+	estadd scalar mean=r(mean)
+	test Uonly=UH
+	estadd scalar p1=r(p)
+	test Honly=UH
+	estadd scalar p2=r(p)
+	test Honly=Uonly
+	estadd scalar p3=r(p)
+}
+
+foreach x in found_IT { //m3
+	xi: reg `x' ${treatmentdummies} ${controls} ///
+	if dead==0 & found_RT==0, ///
+	cluster(sch03v1)
+	eststo
+	summarize `x' if group03v1=="C" & dead==0 & found_RT==0
+	estadd scalar mean=r(mean)
+	test Uonly=UH
+	estadd scalar p1=r(p)
+	test Honly=UH
+	estadd scalar p2=r(p)
+	test Honly=Uonly
+	estadd scalar p3=r(p)
+}
+
+estout est1 est2 est4 est3 ///
+using taba3_rep.tex, replace ///
+cells(b(star fmt(3)) se(par)) ///
+keep(Uonly Honly UH) ///
+stats(N mean p1 p2 p3, ///
+labels("Observations" "Control attrition" "U=UH" "H=UH" "U=H") ///
+fmt(%15.0fc %9.3f %9.3f %9.3f %9.3f )) ///
+mlabels("Dead" "Found RT" "Found IT" "Found") ///
+collabels(none) ///
+label wrap ///
+numbers ///
+starlevels(* 0.1 ** 0.05 *** 0.01) ///
+style(tex) varlabels(_cons Constant) ///
+prehead(\begin{center} \begin{threeparttable} ///
+\begin{tabular}{l*{@M}{r}} \hline \hline ) ///
+posthead(\hline ) ///
+prefoot(\hline ) ///
+postfoot(\hline \end{tabular} \begin{tablenotes} \small ///
+\item Standard errors in parentheses, ///
+clustered by school. $@starlegend$  ///
+\end{tablenotes} \end{threeparttable} \end{center})
+
+eststo clear
+
+*original do-file
+/*
 #delimit;
 local i 2;
 while `i'>0 { ;
@@ -151,3 +221,4 @@ local i=`i'-1;
 } ;
 
 #delimit cr
+*/
