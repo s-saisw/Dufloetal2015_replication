@@ -18,10 +18,10 @@ global controlsB="yrbirth_all yrbirth_missing"
 global varlist "presence evmar05v3 evpreg05v3 evpregunmar05v3 evunpregmar05v3 dropout07v2 evmar07v2 evpreg07v2 evpregunmar07v2 evunpregmar07v2"
 
 * Merge school data and individual data. This is the same as the original do file    
-do clean.do
+run clean.do
 
 * Merge school data with data from separate in-class survey. This is an extension. 
-do clean2.do
+run clean2.do
 
 * Incorporate religion into balance check
 do extension_tab1.do
@@ -32,155 +32,17 @@ do replication_tab2a.do
 * Regression: Table 2B girls only
 do replication_tab2b.do
 
+* Regression: Table 3 girls only
+do replication_tab3.do
+
 * Regression: Table A2 Attrition in short run and medium run surveys
 do replication_taba2.do
 
 * Regression: Table A3 Attrition in long run survey
 do replication_taba3.do
 
-****************************
-*** Heckman 2-step model ***
-****************************
-
-use attri_SMR.dta, replace
-drop if sex !=2
-sort pupilid
-
-foreach x in dropout05v3 presence evmar05v3 evpreg05v3{
-	gen `x'_found = 0
-	replace `x'_found = 1 if `x'_missing==0
-}
-
-gen distance = Q_b1_21
-
-foreach x in dropout05v3 presence {
-	xi: heckman `x' ${treatmentdummies} ${controlsR}, ///
-	twostep select(${treatmentdummies} ${controlsR}) 
-	eststo
-
-	xi: heckman `x' ${treatmentdummies} ${controlsR}, ///
-	twostep select(${treatmentdummies} ${controlsR} distance)
-	eststo
-	estadd local IV = "Yes"
-}
-
-xi: reg dropout05v3_found distance ${treatmentdummies} ${controlsR}
-test distance
-
-estout est1 est2 est3 est4 ///
-using tab_hec_SR.tex, replace ///
-cells(b(star fmt(3)) se(par)) ///
-keep(Uonly Honly UH distance) ///
-stats(N IV, ///
-labels("Observations" "Instrument") ///
-fmt(%15.0fc %9.3f )) ///
-mlabels(none) ///
-mgroups("Dropout" "Presence", pattern(1 0 1 0)) ///
-collabels(none) ///
-label wrap ///
-numbers ///
-starlevels(* 0.1 ** 0.05 *** 0.01) ///
-style(tex) varlabels(_cons Constant) ///
-prehead(\begin{center} \begin{threeparttable} ///
-\begin{tabular}{l*{@M}{r}} \hline \hline ) ///
-posthead(\hline ) ///
-prefoot(\hline ) ///
-postfoot(\hline \end{tabular} \begin{tablenotes} \small ///
-\item Standard errors in parentheses, ///
-clustered by school. $@starlegend$  ///
-\end{tablenotes} \end{threeparttable} \end{center})
-
-eststo clear
-
-
-
-*if available for some still considered found
-*some is 0 not all
-* sum of missing max=4 : miss all
-* sum of missing min=0 : available all
-
-/*
-gen found05 = 0 
-replace found05 = 1 ///
-if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing <=3
-
-gen found05_strict = 0 
-replace found05_strict = 1 ///
-if dropout05v3_missing + presence_missing + evmar05v3_missing + evpreg05v3_missing == 0
-
-summarize found05 found05_strict
-
-
-xi: reg found05 ${treatmentdummies} ${controlsR}, ///
-cluster(sch03v1)
-test Uonly=UH 
-	estadd local p1=r(p)
-	test Honly=UH //significant
-	estadd local p2=r(p)
-	test Honly=Uonly 
-	estadd local p3=r(p)
-
-xi: reg found05_strict ${treatmentdummies} ${controlsR}, ///
-cluster(sch03v1)
-test Uonly=UH //significant
-	estadd local p1=r(p)
-	test Honly=UH
-	estadd local p2=r(p)
-	test Honly=Uonly
-	estadd local p3=r(p)
-*/
-
-foreach x in dropout05v3 presence {
-	foreach y in Uonly Honly UH {
-		leebounds `x' `y'
-		eststo
-		}
-}
-
-estout est1 est2 est3 est4 est5 est6 ///
-using tab_lee_SR.tex, replace ///
-cells(b(star fmt(3)) se(par)) ///
-stats(N trim, ///
-labels("Observations" "Trimming proportion") ///
-fmt(%15.0fc %9.3f )) ///
-mlabels("Uonly" "Honly" "UH" "Uonly" "Honly" "UH") ///
-mgroups("Dropout" "Presence", pattern(1 0 0 1 0 0)) ///
-collabels(none) ///
-label wrap ///
-numbers ///
-starlevels(* 0.1 ** 0.05 *** 0.01) ///
-style(tex) varlabels(_cons Constant) ///
-prehead(\begin{center} \begin{threeparttable} ///
-\begin{tabular}{l*{@M}{r}} \hline \hline ) ///
-posthead(\hline ) ///
-prefoot(\hline ) ///
-postfoot(\hline \end{tabular} \begin{tablenotes} \small ///
-\item Standard errors in parentheses, ///
-clustered by school. $@starlegend$  ///
-\end{tablenotes} \end{threeparttable} \end{center})
-
-eststo clear
-
-
-
-esttab
-leebounds dropout05v3 Uonly // -.0246442 to -.0208772 sig
-eststo clear
-
-
-leebounds dropout05v3 Honly
-eststo
-
-leebounds dropout05v3 UH
-
-gen H_dummy = 0
-replace H_dummy = 1 if Honly == 1 | UH == 1
-
-xi: reg dropout05v3 H_dummy // -.0002798  insig
-xi: reg dropout05v3 H_dummy ${controlsR} //.0091512  insig 
-
-xi: leebounds dropout05v3 H_dummy //  -.0007494  to .0019819 insig
-
+* Robustness check on attrition
+do extension_attrition.do
 
 /*
 ********************;
@@ -510,8 +372,6 @@ local i=`i'-1;
 * LR impacts ?
 
 #delimit ;
-
-use studysample_allmerged2.dta, clear;
 	
 local depvars 17;
 for any 
