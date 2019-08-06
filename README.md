@@ -7,6 +7,7 @@ Result is robust to selection bias and religion at school level is balanced. <br
 
 See replication_documentation.pdf for details.
 
-## Comments from Prof Yoshito Takasaki
+## Comments 
+Prof Yoshito Takasaki
 - Lee's bound monotonicity assumption is not yet verified.
 - Cluster standard error for long-run simple OLS too make it comparable to the original result.
